@@ -5,15 +5,14 @@ from redis import StrictRedis
 
 
 class BloomFilter(object):
-    def __init__(self, filter_name, capacity=0, error_rate=0.01, redis=None, delete_previous_filter=True):
+    def __init__(self, filter_name, capacity=0, error_rate=0.01, redis=None, delete_filter=False):
         """
         # WARN: Delete the previous filter, if you change the capacity or the error_rate,
         otherwise the lookup function will be incorrect
         :param filter_name: The name of the key in the redis
         :param capacity: The expected number of items in the filter
         :param error_rate: 0.01 is 1%
-        :param delete_previous_filter: Set to False if you want to store the values in the filter 
-        upon completion of your program
+        :param delete_filter: delete the previous filter
         """
         if redis is None:
             self.redis = StrictRedis()
@@ -41,9 +40,10 @@ class BloomFilter(object):
             raise Exception('Bitmap limit is %s (512MB), current is %s (%sMB), see: http://redis.io/commands/SETBIT\n'
                             'Try to decrease the capacity or to increase the error_rate' %
                             (bits_in_512_mb, self.array_size, current_size_in_mb))
-        if delete_previous_filter:
+        if delete_filter:
             self.redis.delete(filter_name)
-        self.redis.setbit(filter_name, self.array_size - 1, 0)  # reserve memory into redis for the filter
+        if not self.redis.exists(filter_name):
+            self.redis.setbit(filter_name, self.array_size - 1, 0)  # reserve memory into redis for the filter
 
     def info(self):
         print('Error rate is %s (%s%% of 100%%)' % (self.error_rate, self.error_rate * 100))
@@ -91,3 +91,4 @@ def test_bloom():
     avg_num = amount_of_false_positives / len(experiments_results)
     print('---\nAverage number of false positives:', avg_num, 'of', capacity)
     print('Error rate (false positives) for the test: %.2f%%' % (avg_num / capacity * 100))
+    print('')
