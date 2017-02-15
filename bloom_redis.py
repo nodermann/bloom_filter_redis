@@ -1,7 +1,18 @@
 import math
 import mmh3
+import time
 
 from redis import StrictRedis
+
+
+def time_it(f):
+    def tmp(*args, **kwargs):
+        t = time.time()
+        res = f(*args, **kwargs)
+        print('Runtime: %f' % (time.time() - t), f.__name__)
+        return res
+
+    return tmp
 
 
 class BloomFilter(object):
@@ -45,6 +56,9 @@ class BloomFilter(object):
         if not self.redis.exists(filter_name):
             self.redis.setbit(filter_name, self.array_size - 1, 0)  # reserve memory into redis for the filter
 
+    def delete_filter(self, filter_name):
+        self.redis.delete(filter_name)
+
     def info(self):
         print('Error rate is %s (%s%% of 100%%)' % (self.error_rate, self.error_rate * 100))
         print('Capacity is %s' % self.capacity)
@@ -56,6 +70,7 @@ class BloomFilter(object):
             offset = mmh3.hash(string, seed) % self.array_size
             self.redis.setbit(self.filter_name, offset, 1)
 
+    # @time_it
     def lookup(self, string):
         for seed in range(self.number_of_hashes):
             offset = mmh3.hash(string, seed) % self.array_size
@@ -70,7 +85,8 @@ def test_bloom():
     capacity = 100
     number_of_experiments = 200
 
-    b = BloomFilter('test_bloom', capacity)
+    filter_name = 'test_bloom'
+    b = BloomFilter(filter_name, capacity)
     b.info()
 
     for x in range(capacity):
@@ -92,3 +108,8 @@ def test_bloom():
     print('---\nAverage number of false positives:', avg_num, 'of', capacity)
     print('Error rate (false positives) for the test: %.2f%%' % (avg_num / capacity * 100))
     print('')
+    b.delete_filter(filter_name)
+
+
+if __name__ == '__main__':
+    test_bloom()
